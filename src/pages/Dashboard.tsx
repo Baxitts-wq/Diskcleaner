@@ -1,18 +1,30 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import { motion } from 'framer-motion';
 import { HardDrive, Cpu, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { systemInfo, diskInfo, fetchSystemInfo, fetchDiskInfo } = useStore();
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
     fetchSystemInfo();
     fetchDiskInfo();
+    checkAdmin();
   }, []);
 
-  // Note: node-disk-info blocks are generally in bytes or 1K blocks depending on OS. We'll treat them as bytes for visual ratio.
+  const checkAdmin = async () => {
+    try {
+      const adminStatus = await window.electronAPI.isAdmin();
+      setIsAdmin(adminStatus);
+    } catch (e) {
+      setIsAdmin(false);
+    }
+  };
+
   const totalDiskSpace = diskInfo.reduce((acc, disk) => acc + (disk.blocks || 0), 0);
   const totalUsedSpace = diskInfo.reduce((acc, disk) => acc + (disk.used || 0), 0);
   const totalFreeSpace = totalDiskSpace - totalUsedSpace;
@@ -46,7 +58,16 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {isAdmin === false && (
+        <div className="bg-red-500/10 border border-red-500/20 text-red-200 px-4 py-3 rounded-xl flex items-center gap-3 shadow-lg">
+          <AlertCircle size={20} className="text-red-500 flex-shrink-0" />
+          <div className="text-sm">
+            <span className="font-bold">Mode Non-Administrateur:</span> Certaines optimisations (nettoyage RAM cache, tweaks réseau, gestion de démarrage) requièrent les droits administrateur. Lancez l'application en mode administrateur.
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="bg-dark-800/80 backdrop-blur-md p-6 rounded-2xl border border-dark-700 shadow-xl flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 text-slate-400 mb-4">
@@ -56,13 +77,16 @@ export default function Dashboard() {
             <p className="text-5xl font-bold text-white">Good</p>
             <p className="text-sm text-slate-400 mt-2">No critical issues found</p>
           </div>
-          <button className="mt-6 bg-primary-600 hover:bg-primary-500 text-white py-2 px-4 rounded-lg font-medium transition-colors">
+          <button 
+            onClick={() => navigate('/cleaner', { state: { autoScan: true } })}
+            className="mt-6 bg-primary-600 hover:bg-primary-500 text-white py-2.5 px-4 rounded-xl font-medium transition-colors shadow-lg shadow-primary-900/10"
+          >
             Quick Scan
           </button>
         </div>
 
-        <div className="bg-dark-800/80 backdrop-blur-md p-6 rounded-2xl border border-dark-700 shadow-xl col-span-2 flex items-center">
-          <div className="h-48 w-48 relative">
+        <div className="bg-dark-800/80 backdrop-blur-md p-6 rounded-2xl border border-dark-700 shadow-xl col-span-1 xl:col-span-2 flex flex-col sm:flex-row items-center gap-6">
+          <div className="h-44 w-44 relative flex-shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -89,7 +113,7 @@ export default function Dashboard() {
             </div>
           </div>
           
-          <div className="flex-1 ml-8">
+          <div className="flex-1 w-full">
             <h3 className="text-xl font-semibold text-white mb-6">Storage Overview</h3>
             <div className="space-y-4">
               <div>
@@ -123,15 +147,15 @@ export default function Dashboard() {
           </div>
           {systemInfo ? (
             <div className="space-y-3">
-              <div className="flex justify-between border-b border-dark-700 pb-2">
+              <div className="flex justify-between border-b border-dark-700 pb-2 text-sm">
                 <span className="text-slate-400">OS</span>
                 <span className="text-white text-right">{systemInfo.os}</span>
               </div>
-              <div className="flex justify-between border-b border-dark-700 pb-2">
+              <div className="flex justify-between border-b border-dark-700 pb-2 text-sm">
                 <span className="text-slate-400">CPU</span>
                 <span className="text-white text-right truncate ml-4" title={systemInfo.cpu}>{systemInfo.cpu}</span>
               </div>
-              <div className="flex justify-between pb-2">
+              <div className="flex justify-between pb-2 text-sm">
                 <span className="text-slate-400">RAM</span>
                 <span className="text-white text-right">{formatBytes(systemInfo.ramTotal)}</span>
               </div>

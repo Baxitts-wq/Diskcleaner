@@ -11,6 +11,9 @@ export interface IElectronAPI {
   getBgApps: () => Promise<any[]>;
   killProcess: (pid: number) => Promise<{ success: boolean; error?: string }>;
   getStartupApps: () => Promise<any[]>;
+  disableStartupApp: (name: string) => Promise<{ success: boolean; error?: string }>;
+  isAdmin: () => Promise<boolean>;
+  deleteFiles: (paths: string[]) => Promise<{ success: boolean; deletedCount: number; errorCount: number }>;
   getSettings: () => Promise<any>;
   saveSettings: (settings: any) => Promise<{ success: boolean; error?: string }>;
   minimizeWindow: () => void;

@@ -7,7 +7,7 @@ import { exec } from 'child_process';
 import util from 'util';
 
 // Import new handlers
-import { clearRAMCache, optimizeNetwork, getBackgroundProcesses, killProcess, getStartupApps } from './handlers/system';
+import { clearRAMCache, optimizeNetwork, getBackgroundProcesses, killProcess, getStartupApps, disableStartupApp } from './handlers/system';
 import { scanJunkExtended, cleanJunkExtended, getDirectorySize } from './handlers/cleaner';
 import { initSettings, getSettings, saveSettings } from './handlers/settings';
 
@@ -181,6 +181,30 @@ ipcMain.handle('optimize-network', async (_, mode) => await optimizeNetwork(mode
 ipcMain.handle('get-bg-apps', async () => await getBackgroundProcesses());
 ipcMain.handle('kill-process', async (_, pid) => await killProcess(pid));
 ipcMain.handle('get-startup-apps', async () => await getStartupApps());
+ipcMain.handle('disable-startup-app', async (_, name) => await disableStartupApp(name));
+ipcMain.handle('is-admin', async () => {
+  try {
+    await execPromise('net session');
+    return true;
+  } catch (e) {
+    return false;
+  }
+});
+ipcMain.handle('delete-files', async (_, filePaths: string[]) => {
+  let deletedCount = 0;
+  let errorCount = 0;
+  for (const filePath of filePaths) {
+    try {
+      if (fs.existsSync(filePath)) {
+        await fs.remove(filePath);
+        deletedCount++;
+      }
+    } catch (e) {
+      errorCount++;
+    }
+  }
+  return { success: true, deletedCount, errorCount };
+});
 
 // Settings IPC
 ipcMain.handle('get-settings', async () => await getSettings());

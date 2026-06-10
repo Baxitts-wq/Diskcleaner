@@ -4,37 +4,44 @@ import os from 'os';
 
 const execPromise = util.promisify(exec);
 
+// Helper to run PowerShell commands safely via EncodedCommand (bypasses escaping issues)
+async function runPowerShell(script: string) {
+  const buffer = Buffer.from(script, 'utf16le');
+  const base64 = buffer.toString('base64');
+  return execPromise(`powershell -NoProfile -NonInteractive -EncodedCommand ${base64}`);
+}
+
 // ---------------------------------------------------------
 // RAM Cleaner
 // ---------------------------------------------------------
 export async function clearRAMCache() {
-  const csharpCode = `
-    using System;
-    using System.Runtime.InteropServices;
-    public class RAMCleaner {
-      [DllImport("psapi.dll")]
-      static extern int EmptyWorkingSet(IntPtr hwProc);
-      
-      public static void Clear() {
-        try {
-          var procs = System.Diagnostics.Process.GetProcesses();
-          foreach (var p in procs) {
-            try {
-               EmptyWorkingSet(p.Handle);
-            } catch {}
-          }
-        } catch {}
-      }
-    }
-    RAMCleaner.Clear();
-  `;
-
-  // Measure before
   const memBefore = os.freemem();
 
+  const script = `
+    $code = @"
+    using System;
+    using System.Runtime.InteropServices;
+    using System.Diagnostics;
+    public class RAMCleaner {
+        [DllImport("psapi.dll", SetLastError = true)]
+        public static extern bool EmptyWorkingSet(IntPtr hProcess);
+        public static void Clear() {
+            foreach (Process p in Process.GetProcesses()) {
+                try {
+                    EmptyWorkingSet(p.Handle);
+                } catch {}
+            }
+        }
+    }
+    "@
+    try {
+        Add-Type -TypeDefinition $code -ErrorAction SilentlyContinue
+    } catch {}
+    [RAMCleaner]::Clear()
+  `;
+
   try {
-    // Empty working sets using PowerShell inline C#
-    await execPromise(`powershell -Command "Add-Type -TypeDefinition '${csharpCode}'"`);
+    await runPowerShell(script);
   } catch (e) {
     console.error('Failed to clear RAM via C# / PowerShell', e);
   }
@@ -119,14 +126,6 @@ export async function killProcess(pid: number) {
 // ---------------------------------------------------------
 export async function getStartupApps() {
   try {
-    // HKCU Run
-    const { stdout } = await execPromise('powershell -Command "Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run, HKLM:\\Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Run, HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run -ErrorAction SilentlyContinue | Select-Object -Property * | ConvertTo-Json"');
-    
-    // We do a simplified parsing. A real robust version would parse deeply.
-    if (!stdout || stdout.trim() === "") return [];
-    
-    // In PowerShell, ConvertTo-Json on Get-ItemProperty can be messy. 
-    // Alternative: WMI for Startup items
     const wmiRes = await execPromise('powershell -Command "Get-CimInstance Win32_StartupCommand | Select-Object Name, Command, Location, User | ConvertTo-Json"');
     if (!wmiRes.stdout || wmiRes.stdout.trim() === "") return [];
 
@@ -138,10 +137,28 @@ export async function getStartupApps() {
       command: app.Command,
       location: app.Location,
       user: app.User,
-      enabled: true // Detecting enabled/disabled from registry is complex, simplified for now
+      enabled: true
     }));
   } catch (e) {
     console.error('Startup apps error', e);
     return [];
+  }
+}
+
+export async function disableStartupApp(name: string) {
+  try {
+    const script = `
+      Remove-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "${name}" -ErrorAction SilentlyContinue
+      Remove-ItemProperty -Path "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "${name}" -ErrorAction SilentlyContinue
+      Remove-ItemProperty -Path "HKLM:\\Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "${name}" -ErrorAction SilentlyContinue
+      $startupFolder = Join-Path $env:APPDATA "Microsoft\\Windows\\Start Menu\\Programs\\Startup"
+      $lnkFile = Join-Path $startupFolder "${name}.lnk"
+      if (Test-Path $lnkFile) { Remove-Item $lnkFile -Force }
+    `;
+    await runPowerShell(script);
+    return { success: true };
+  } catch (e: any) {
+    console.error('Failed to disable startup app', e);
+    return { success: false, error: e.message };
   }
 }

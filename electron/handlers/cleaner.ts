@@ -94,8 +94,12 @@ export async function cleanJunkExtended(itemsToClean: string[]) {
           const filePath = path.join(item.path, file);
           try {
             const stats = await fs.stat(filePath);
+            let itemSize = stats.size;
+            if (stats.isDirectory()) {
+              itemSize = await getDirectorySize(filePath);
+            }
             await fs.remove(filePath);
-            cleanedSize += stats.size;
+            cleanedSize += itemSize;
             successCount++;
           } catch (e) {
             failCount++; // Usually locked files like in-use discord cache

@@ -21,7 +21,12 @@ export default function StorageAnalyzer() {
   };
 
   const formatSize = (bytes: number) => {
-    return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+    if (!bytes || isNaN(bytes)) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    if (i < 0) return '0 B';
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   return (
