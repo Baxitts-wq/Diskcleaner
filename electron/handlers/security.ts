@@ -422,13 +422,59 @@ export async function scanThreats() {
 // ─────────────────────────────────────────────────────
 // QUARANTINE / REMEDIATE
 // ─────────────────────────────────────────────────────
+function cleanErrorMessage(err: any): string {
+  if (!err) return 'Unknown error';
+  const msg = err.message || String(err);
+  
+  if (msg.includes('Access is denied') || msg.includes('UnauthorizedAccessException') || msg.includes('PermissionDenied')) {
+    return 'Permission Denied: This action requires Administrator privileges. Please restart the app as Administrator.';
+  }
+  if (msg.includes('not found') || msg.includes('InstanceNotFound') || msg.includes('does not exist')) {
+    return 'Item not found or already removed.';
+  }
+  
+  if (msg.includes('#< CLIXML')) {
+    const cleanLines = msg.split('\n')
+      .map((line: string) => line.trim())
+      .filter((line: string) => !line.startsWith('<') && !line.startsWith('#<') && !line.includes('powershell -NoProfile'));
+    
+    if (cleanLines.length > 0) {
+      return cleanLines.join(' ');
+    }
+  }
+
+  const lines = msg.split('\n');
+  if (lines.length > 0) {
+    const firstLine = lines[0];
+    if (firstLine.startsWith('Command failed:')) {
+      const realError = lines.slice(1).map((l: string) => l.trim()).filter(Boolean).join(' ');
+      if (realError) {
+        return realError.replace(/<[^>]*>/g, '').replace(/#<\s*CLIXML/, '').trim() || 'Command execution failed.';
+      }
+    }
+  }
+  
+  return msg;
+}
+
+// ─────────────────────────────────────────────────────
+// QUARANTINE / REMEDIATE
+// ─────────────────────────────────────────────────────
 export async function quarantineThreat(threatId: string) {
   try {
     // Process kill
     if (threatId.startsWith('proc_')) {
       const pidMatch = threatId.match(/proc_(\d+)/);
       if (pidMatch) {
-        await execPromise(`taskkill /PID ${pidMatch[1]} /F`);
+        try {
+          await execPromise(`taskkill /PID ${pidMatch[1]} /F`);
+        } catch (procErr: any) {
+          // Check if process is already killed/not found
+          if (procErr.message && (procErr.message.includes('not found') || procErr.message.includes('C\'est impossible'))) {
+            return { success: true, message: `Process PID ${pidMatch[1]} was already closed.` };
+          }
+          throw procErr;
+        }
         return { success: true, message: `Killed process PID ${pidMatch[1]}` };
       }
     }
@@ -439,11 +485,11 @@ export async function quarantineThreat(threatId: string) {
       if (nameMatch) {
         const entryName = nameMatch[1];
         const script = `
-          Remove-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "${entryName}" -ErrorAction SilentlyContinue
-          Remove-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce" -Name "${entryName}" -ErrorAction SilentlyContinue
-          Remove-ItemProperty -Path "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "${entryName}" -ErrorAction SilentlyContinue
-          Remove-ItemProperty -Path "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce" -Name "${entryName}" -ErrorAction SilentlyContinue
-          Remove-ItemProperty -Path "HKLM:\\Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "${entryName}" -ErrorAction SilentlyContinue
+          try { Remove-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "${entryName}" -ErrorAction SilentlyContinue } catch {}
+          try { Remove-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce" -Name "${entryName}" -ErrorAction SilentlyContinue } catch {}
+          try { Remove-ItemProperty -Path "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "${entryName}" -ErrorAction SilentlyContinue } catch {}
+          try { Remove-ItemProperty -Path "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce" -Name "${entryName}" -ErrorAction SilentlyContinue } catch {}
+          try { Remove-ItemProperty -Path "HKLM:\\Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "${entryName}" -ErrorAction SilentlyContinue } catch {}
         `;
         await runPowerShell(script);
         return { success: true, message: `Removed startup entry "${entryName}"` };
@@ -468,12 +514,20 @@ export async function quarantineThreat(threatId: string) {
     // Scheduled task disable
     if (threatId.startsWith('task_')) {
       const taskName = threatId.replace('task_', '');
-      await runPowerShell(`Disable-ScheduledTask -TaskName "${taskName}" -ErrorAction SilentlyContinue`);
+      const script = `
+        $task = Get-ScheduledTask | Where-Object { $_.TaskName -eq "${taskName}" }
+        if ($task) {
+          $task | Disable-ScheduledTask
+        } else {
+          throw "Scheduled task '${taskName}' not found."
+        }
+      `;
+      await runPowerShell(script);
       return { success: true, message: `Disabled scheduled task "${taskName}"` };
     }
 
     return { success: false, message: 'Unknown threat type' };
   } catch (e: any) {
-    return { success: false, message: e.message };
+    return { success: false, message: cleanErrorMessage(e) };
   }
 }
