@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="branding/logo.png" alt="DiskSweep Logo" width="128" />
+  <img src="branding/logo.png" alt="DiskSweep Logo" width="256" />
   <h1>DiskSweep</h1>
   <p><strong>A Premium Windows System Optimizer & Storage Cleaner</strong></p>
   
