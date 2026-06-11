@@ -1,6 +1,6 @@
 import React from 'react';
 import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, HardDrive, Trash2, Copy, Activity, Settings, X, Minus, Maximize2 } from 'lucide-react';
+import { LayoutDashboard, HardDrive, Trash2, Copy, Activity, Settings, X, Minus, Maximize2, Shield } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 
 import Dashboard from './pages/Dashboard';
@@ -8,6 +8,7 @@ import StorageAnalyzer from './pages/StorageAnalyzer';
 import Cleaner from './pages/Cleaner';
 import DuplicateFinder from './pages/DuplicateFinder';
 import Performance from './pages/Performance';
+import SecurityScanner from './pages/SecurityScanner';
 import SettingsPage from './pages/SettingsPage';
 
 function TitleBar() {
@@ -41,6 +42,7 @@ function Sidebar() {
     { path: '/cleaner', icon: <Trash2 size={20} />, label: 'Cleaner' },
     { path: '/duplicates', icon: <Copy size={20} />, label: 'Duplicates' },
     { path: '/performance', icon: <Activity size={20} />, label: 'Performance' },
+    { path: '/security', icon: <Shield size={20} />, label: 'Security' },
   ];
 
   return (
@@ -94,6 +96,7 @@ export default function App() {
                 <Route path="/cleaner" element={<Cleaner />} />
                 <Route path="/duplicates" element={<DuplicateFinder />} />
                 <Route path="/performance" element={<Performance />} />
+                <Route path="/security" element={<SecurityScanner />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Routes>
             </div>

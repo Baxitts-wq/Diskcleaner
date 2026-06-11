@@ -8,8 +8,9 @@ import util from 'util';
 
 // Import new handlers
 import { clearRAMCache, optimizeNetwork, getBackgroundProcesses, killProcess, getStartupApps, disableStartupApp } from './handlers/system';
-import { scanJunkExtended, cleanJunkExtended, getDirectorySize } from './handlers/cleaner';
+import { scanJunkExtended, cleanJunkExtended, getDirectorySize, scanDeepClean, executeDeepClean } from './handlers/cleaner';
 import { initSettings, getSettings, saveSettings } from './handlers/settings';
+import { scanThreats, quarantineThreat } from './handlers/security';
 
 const execPromise = util.promisify(exec);
 let mainWindow: BrowserWindow | null = null;
@@ -173,6 +174,24 @@ ipcMain.handle('scan-junk', async () => {
 
 ipcMain.handle('clean-junk', async (_, itemsToClean: string[]) => {
   return await cleanJunkExtended(itemsToClean);
+});
+
+// Deep Clean
+ipcMain.handle('scan-deep-clean', async () => {
+  return await scanDeepClean();
+});
+
+ipcMain.handle('execute-deep-clean', async (_, itemsToClean: string[]) => {
+  return await executeDeepClean(itemsToClean);
+});
+
+// Security Scanner
+ipcMain.handle('scan-threats', async () => {
+  return await scanThreats();
+});
+
+ipcMain.handle('quarantine-threat', async (_, threatId: string) => {
+  return await quarantineThreat(threatId);
 });
 
 // Extended System Operations
